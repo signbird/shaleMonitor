@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:aop="http://www.springframework.org/schema/aop" xmlns:tx="http://www.springframework.org/schema/tx"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+                     http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+                     http://www.springframework.org/schema/context
+                     http://www.springframework.org/schema/context/spring-context-3.0.xsd">
+	<context:property-placeholder location="classpath:resource.properties" />
+	<context:annotation-config />
+	<context:component-scan base-package="com.fasthink.shalemonitor.action" />
+	<import resource="classpath:springmvc-resteasy.xml" />
+	
+	<bean id="jedisPoolConfig" class="redis.clients.jedis.JedisPoolConfig">
+		<property name="minIdle" value="${redis.pool.minIdle}" />
+		<property name="maxIdle" value="${redis.pool.maxIdle}" />
+		<property name="testOnBorrow" value="${redis.pool.testOnBorrow}" />
+	</bean>
+
+	<bean id="shardedJedisPool" class="redis.clients.jedis.ShardedJedisSentinelPool">
+		<constructor-arg index="0" ref="jedisPoolConfig" />
+		<constructor-arg index="1" value="${redis.masters}" />
+		<constructor-arg index="2" value="${redis.sentinels}" />
+		<constructor-arg index="3" value="${redis.openSentinel}" />
+		<constructor-arg index="4" value="${redis.connect}" />
+		<constructor-arg index="5" value="" />
+	</bean>
+
+	<bean id="shardedService" class="com.fasthink.shalemonitor.cache.impl.ShardedServiceImpl">
+		<property name="shardedJedisPool" ref="shardedJedisPool" />
+	</bean>
+
+	<bean id="cacheManager" class="com.fasthink.shalemonitor.cache.impl.CacheManagerImpl">
+		<property name="jedisService" ref="shardedService" />
+		<property name="timeout" value="${redis.timeout}" />
+		<property name="enable" value="${redis.enable}" />
+	</bean>
+	
+	<bean id="baseService" abstract="true"
+        class="com.fasthink.shalemonitor.service.impl.BaseServiceImpl">
+        <property name="cacheManager" ref="cacheManager" />
+    </bean>
+
+	<bean id="systemConfigService" parent="baseService"
+		class="com.fasthink.shalemonitor.service.impl.SystemConfigServiceImpl">
+		<property name="dataService" ref="dataService" />
+	</bean>
+
+	<bean id="dataService" parent="baseService"
+		class="com.fasthink.shalemonitor.service.impl.DataServiceImpl">
+		<property name="periodCount" value="${sys.periodCount}" />
+		<property name="supportAbandon" value="${sys.supportAbandon}" />
+		<property name="abandonCount" value="${sys.abandonCount}" />
+	</bean>
+	
+	<!-- for test -->
+	<bean id="preloadService" class="com.fasthink.shalemonitor.service.impl.PreloadServiceImpl">
+        <property name="dataService" ref="dataService" />
+    </bean>
+	
+</beans>
